@@ -1,0 +1,108 @@
+_schema-version: "3.1"
+ID: postgres
+version: 1.0.0
+description: "A simple CAP project."
+parameters:
+   enable-parallel-deployments: true
+build-parameters:
+   before-all:
+      - builder: custom
+        commands:
+           - cds build --production
+
+modules:
+   - name: approuter
+     type: nodejs
+     path: approuter
+     parameters:
+        buildpack: nodejs_buildpack
+        disk-quota: 512M
+        memory: 128M
+        instances: 1
+        keep-existing:
+           env: true
+     requires:
+        - name: postgres-auth
+        - name: srv-api
+          group: destinations
+          properties:
+             forwardAuthToken: true
+             strictSSL: false
+             name: postgres_services
+             url: ~{srv-url}
+        - name: destinations
+     build-parameters:
+        ignore: ["node_modules/"]
+   - name: postgres-adminer
+     type: application
+     build-parameters:
+        no-source: true
+     parameters:
+        no-route: false
+        no-start: true
+        disk-quota: 256MB
+        memory: 128MB
+        docker:
+           image: dockette/adminer:pgsql
+        instances: 1
+     requires:
+        - name: postgres-database
+   - name: postgres-srv
+     type: nodejs
+     path: gen/srv
+     parameters:
+        buildpack: nodejs_buildpack
+     build-parameters:
+        builder: npm-ci
+     provides:
+        - name: srv-api # required by consumers of CAP services (e.g. approuter)
+          properties:
+             srv-url: ${default-url}
+     requires:
+        - name: postgres-auth
+        - name: postgres-database
+   - name: postgres-db-deployer
+     type: custom
+     path: gen/db
+     build-parameters:
+        ignore: ["node_modules/"]
+     requires:
+        - name: postgres-database
+     parameters:
+        buildpacks:
+           [
+              https://github.com/cloudfoundry/apt-buildpack#v0.2.2,
+              nodejs_buildpack,
+           ]
+        no-route: true
+        no-start: true
+        disk-quota: 2GB
+        memory: 512MB
+        tasks:
+           - name: deploy_to_postgresql
+             command: chmod 755 deploy.sh && ./deploy.sh
+             disk-quota: 2GB
+             memory: 512MB
+
+resources:
+   - name: postgres-auth
+     type: org.cloudfoundry.managed-service
+     parameters:
+        service: xsuaa
+        service-plan: application
+        path: ./xs-security.json
+        config:
+           xsappname: postgres-${org}-${space}
+           tenant-mode: dedicated
+   - name: postgres-database
+     parameters:
+        path: ./pg-options.json
+        service: postgresql-db
+        service-plan: trial
+        service-tags:
+           - plain
+        skip-service-updates:
+           parameters: true
+     type: org.cloudfoundry.managed-service
+   - name: destinations
+     type: org.cloudfoundry.existing-service

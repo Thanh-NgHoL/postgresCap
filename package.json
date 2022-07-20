@@ -1,0 +1,120 @@
+{
+   "name": "postgres",
+   "version": "1.0.0",
+   "description": "A simple CAP project.",
+   "repository": "<Add your repository here>",
+   "license": "UNLICENSED",
+   "private": true,
+   "dependencies": {
+      "@sap/cds": "^6.0.3",
+      "@sap/xssec": "^3",
+      "cds-dbm": "^0.0.36",
+      "cds-pg": "^0.1.29",
+      "express": "^4",
+      "passport": "^0.6.0"
+   },
+   "engines": {
+      "node": "16.x.x"
+   },
+   "devDependencies": {
+      "@sap/ux-specification": "^1.102.1",
+      "mbt": "^1.2.18",
+      "sqlite3": "^5.0.2"
+   },
+   "scripts": {
+      "start": "cds run",
+      "build:win": "mbt build",
+      "build": "mbt build -t ./mta_archives --mtar mta.mtar",
+      "deploy": "cf deploy mta_archives/mta.mtar -f"
+   },
+   "eslintConfig": {
+      "extends": "eslint:recommended",
+      "env": {
+         "es2020": true,
+         "node": true,
+         "jest": true,
+         "mocha": true
+      },
+      "globals": {
+         "SELECT": true,
+         "INSERT": true,
+         "UPDATE": true,
+         "DELETE": true,
+         "CREATE": true,
+         "DROP": true,
+         "CDL": true,
+         "CQL": true,
+         "CXL": true,
+         "cds": true
+      },
+      "rules": {
+         "no-console": "off",
+         "require-atomic-updates": "off"
+      }
+   },
+   "sapux": [
+      "app/risks",
+      "app/mitigations",
+      "app/risks"
+   ],
+   "cds": {
+      "requires": {
+         "auth": {
+            "[development]": {
+               "strategy": "mock",
+               "users": {
+                  "admin": {
+                     "roles": [
+                        "RiskManager"
+                     ]
+                  }
+               }
+            },
+            "kind": "xsuaa"
+         },
+         "db": {
+            "[production]": {
+               "kind": "postgres"
+            },
+            "kind": "sqlite"
+         },
+         "postgres": {
+            "dialect": "plain",
+            "impl": "cds-pg",
+            "model": [
+               "srv"
+            ]
+         }
+      },
+      "migrations": {
+         "db": {
+            "schema": {
+               "default": "public",
+               "clone": "_cdsdbm_clone",
+               "reference": "_cdsdbm_ref"
+            },
+            "deploy": {
+               "tmpFile": "tmp/_autodeploy.json",
+               "undeployFile": "db/undeploy.json"
+            }
+         }
+      },
+      "build": {
+         "tasks": [
+            {
+               "use": "node-cf",
+               "for": "node-cf",
+               "src": "srv"
+            },
+            {
+               "use": "cds-dbm/dist/build/postgres-cf",
+               "for": "postgres-cf",
+               "src": "db",
+               "options": {
+                  "deployCmd": "npx cds-dbm deploy --load-via delta --auto-undeploy"
+               }
+            }
+         ]
+      }
+   }
+}
